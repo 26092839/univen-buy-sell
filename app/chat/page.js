@@ -59,6 +59,30 @@ export default function ChatPage() {
         created_at: new Date().toISOString()
       }])
       setNewMessage('')
+
+      await fetch('https://onesignal.com/api/v1/notifications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Basic os_v2_app_vxhej7ypina7fafpcz2fzszrtqbe4a36mppectmg6bfb5m26tihvp6d5fd22y6h4tcyglnhgz7j2hkchjsynqafxpvmjitbsiq3qn5q'
+        },
+        body: JSON.stringify({
+          app_id: 'adce44ff-0f43-41f2-80af-16745ccb319c',
+          included_segments: ['All'],
+          contents: { en: `New message about ${listing?.title}: ${newMessage}` },
+          headings: { en: 'UNIVEN Buy & Sell 🛍️' },
+        })
+      })
+    
+  }
+    if (!error) {
+      setMessages([...messages, {
+        sender_email: user.email,
+        receiver_email: receiverEmail,
+        message: newMessage,
+        created_at: new Date().toISOString()
+      }])
+      setNewMessage('')
     }
   }
 
