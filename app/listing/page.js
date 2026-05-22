@@ -6,13 +6,25 @@ export default function ListingPage() {
   const [listing, setListing] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('id')
-    if (id) fetchListing(id)
+ useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get('id')
+    console.log('Listing ID:', id)
+    if (id) {
+      fetchListing(id)
+    } else {
+      setLoading(false)
+    }
   }, [])
 
   async function fetchListing(id) {
-    const { data } = await supabase.from('listings').select('*').eq('id', id).single()
+    const { data, error } = await supabase
+      .from('listings')
+      .select('*')
+      .eq('id', id)
+      .single()
+    console.log('Data:', data)
+    console.log('Error:', error)
     setListing(data)
     setLoading(false)
   }
