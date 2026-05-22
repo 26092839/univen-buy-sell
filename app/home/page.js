@@ -87,7 +87,7 @@ export default function HomePage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           {filtered.map(item => (
-            <div key={item.id} onClick={() => window.location.href = `/listing?id=${item.id}`} style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #C8E6C9', overflow: 'hidden', cursor: 'pointer' }}>
+           <div key={item.id} onClick={() => window.location.href = '/listing?id=' + item.id} style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #C8E6C9', overflow: 'hidden', cursor: 'pointer' }}>
               <div style={{ height: '90px', backgroundColor: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', overflow: 'hidden' }}>
   {item.image_url
     ? <img src={item.image_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
