@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { useEffect } from 'react'
 import { initOneSignal } from '../lib/onesignal'
 
 const categories = ['All', 'Books', 'Electronics', 'Notes', 'Uniforms', 'Other']
