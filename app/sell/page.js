@@ -9,6 +9,20 @@ export default function SellPage() {
   const [category, setCategory] = useState('Books')
   const [condition, setCondition] = useState('Good')
   const [meetup, setMeetup] = useState('')
+const [image, setImage] = useState(null)
+const [imageUrl, setImageUrl] = useState('')
+
+async function handleImageUpload(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  const filename = `${Date.now()}-${file.name}`
+  const { data, error } = await supabase.storage.from('listing-images').upload(filename, file)
+  if (!error) {
+    const { data: urlData } = supabase.storage.from('listing-images').getPublicUrl(filename)
+    setImageUrl(urlData.publicUrl)
+    setImage(file)
+  }
+}
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
 
@@ -28,6 +42,7 @@ export default function SellPage() {
       condition,
       meetup,
       emoji: emojis[category],
+      image_url: imageUrl,
       seller_name: 'UNIVEN Student',
       seller_email: 'student@univen.ac.za',
       status: 'New'
@@ -61,10 +76,15 @@ export default function SellPage() {
 
       <div style={{ padding: '16px' }}>
 
-        <div style={{ height: '120px', backgroundColor: '#E8F5E9', border: '2px dashed #81C784', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', cursor: 'pointer' }}>
-          <span style={{ fontSize: '32px' }}>📷</span>
-          <span style={{ fontSize: '13px', color: '#2E7D32', marginTop: '6px', fontWeight: '500' }}>Add photos of your item</span>
-        </div>
+        <div style={{ marginBottom: '16px' }}>
+  <label style={{ display: 'block', height: '120px', backgroundColor: imageUrl ? 'transparent' : '#E8F5E9', border: '2px dashed #81C784', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden' }}>
+    {imageUrl
+      ? <img src={imageUrl} alt="listing" style={{ width: '100%', height: '120px', objectFit: 'cover' }} />
+      : <><span style={{ fontSize: '32px' }}>📷</span><span style={{ fontSize: '13px', color: '#2E7D32', marginTop: '6px', fontWeight: '500' }}>Tap to add photo</span></>
+    }
+    <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+  </label>
+</div>
 
         <div style={{ marginBottom: '12px' }}>
           <label style={{ fontSize: '12px', color: '#888780', display: 'block', marginBottom: '6px' }}>Item title</label>
