@@ -14,13 +14,16 @@ export default function HomePage() {
     fetchListings()
   }, [])
 
-  async function fetchListings() {
+ async function fetchListings() {
     setLoading(true)
     const { data, error } = await supabase
       .from('listings')
       .select('*')
-      .order('created_at', { ascending: false })
-    if (!error) setListings(data)
+    if (error) {
+      console.log('Error:', error.message)
+    } else {
+      setListings(data || [])
+    }
     setLoading(false)
   }
 
@@ -85,9 +88,11 @@ export default function HomePage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           {filtered.map(item => (
             <div key={item.id} onClick={() => window.location.href = `/listing?id=${item.id}`} style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #C8E6C9', overflow: 'hidden', cursor: 'pointer' }}>
-              <div style={{ height: '90px', backgroundColor: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px' }}>
-                {item.emoji || '📦'}
-              </div>
+              <div style={{ height: '90px', backgroundColor: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', overflow: 'hidden' }}>
+  {item.image_url
+    ? <img src={item.image_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    : item.emoji || '📦'}
+</div>
               <div style={{ padding: '8px 10px' }}>
                 <p style={{ fontSize: '13px', fontWeight: '500', color: '#2C2C2A', margin: '0 0 4px' }}>{item.title}</p>
                 <p style={{ fontSize: '15px', fontWeight: '600', color: '#1B5E20', margin: '0 0 4px' }}>R{item.price}</p>
