@@ -67,10 +67,11 @@ export default function ListingPage() {
           </div>
         </div>
 
-        <a href={`mailto:${listing.seller_email}?subject=Interested in ${listing.title}&body=Hi, I am interested in your listing: ${listing.title} for R${listing.price}`}
-          style={{ display: 'block', width: '100%', padding: '16px', backgroundColor: '#1B5E20', color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', marginBottom: '12px', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}>
-          💬 Message seller
-        </a>
+        <button
+  onClick={() => window.location.href = `/chat?listing_id=${listing.id}&receiver=${listing.seller_email}`}
+  style={{ display: 'block', width: '100%', padding: '16px', backgroundColor: '#1B5E20', color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', marginBottom: '12px', textAlign: 'center', boxSizing: 'border-box' }}>
+  💬 Message seller
+</button>
 
         <button onClick={() => window.location.href = '/home'}
           style={{ width: '100%', padding: '15px', backgroundColor: '#F9A825', color: '#1B5E20', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>
