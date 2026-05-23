@@ -1,43 +1,86 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
-export default function ChatsPage() {
-  const [conversations, setConversations] = useState([])
+export default function ChatPage() {
+  const [messages, setMessages] = useState([])
+  const [newMessage, setNewMessage] = useState('')
   const [user, setUser] = useState(null)
+  const [listing, setListing] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [receiverEmail, setReceiverEmail] = useState('')
+  const bottomRef = useRef(null)
 
   useEffect(() => {
-    getConversations()
+    setup()
   }, [])
 
-  async function getConversations() {
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  async function setup() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { window.location.href = '/'; return }
     setUser(user)
 
+    const params = new URLSearchParams(window.location.search)
+    const listingId = params.get('listing_id')
+    const receiver = params.get('receiver')
+    setReceiverEmail(receiver)
+
+    if (listingId) {
+      const { data } = await supabase
+        .from('listings')
+        .select('*')
+        .eq('id', listingId)
+        .single()
+      setListing(data)
+      await fetchMessages(listingId, user.email, receiver)
+    }
+
+    setLoading(false)
+
+    const channel = supabase
+      .channel('chat-' + listingId)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages'
+      }, payload => {
+        setMessages(prev => [...prev, payload.new])
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }
+
+  async function fetchMessages(listingId, myEmail, otherEmail) {
     const { data } = await supabase
       .from('messages')
       .select('*')
-      .or(`sender_email.eq.${user.email},receiver_email.eq.${user.email}`)
-      .order('created_at', { ascending: false })
+      .eq('listing_id', listingId)
+      .or(
+        `and(sender_email.eq.${myEmail},receiver_email.eq.${otherEmail}),and(sender_email.eq.${otherEmail},receiver_email.eq.${myEmail})`
+      )
+      .order('created_at', { ascending: true })
+    setMessages(data || [])
+  }
 
-    if (data) {
-      const seen = {}
-      const unique = []
-      data.forEach(msg => {
-        const other = msg.sender_email === user.email
-          ? msg.receiver_email
-          : msg.sender_email
-        const key = `${msg.listing_id}-${other}`
-        if (!seen[key]) {
-          seen[key] = true
-          unique.push({ ...msg, otherEmail: other })
-        }
-      })
-      setConversations(unique)
+  async function sendMessage() {
+    if (!newMessage.trim()) return
+    const messageText = newMessage
+    setNewMessage('')
+    const { error } = await supabase.from('messages').insert([{
+      listing_id: listing?.id,
+      sender_email: user.email,
+      receiver_email: receiverEmail,
+      message: messageText
+    }])
+    if (error) {
+      console.log('Send error:', error.message)
+      setNewMessage(messageText)
     }
-    setLoading(false)
   }
 
   if (loading) return (
@@ -45,71 +88,74 @@ export default function ChatsPage() {
   )
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#F5F7F2', fontFamily: 'Inter, sans-serif', paddingBottom: '70px' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#F5F7F2', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
 
-      <div style={{ backgroundColor: '#1B5E20', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <div style={{ width: '34px', height: '34px', backgroundColor: '#F9A825', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>💬</div>
-        <div>
-          <div style={{ color: '#FFFFFF', fontSize: '14px', fontWeight: '600' }}>My Chats</div>
-          <div style={{ color: '#A5D6A7', fontSize: '11px' }}>University of Venda</div>
+      {/* Header */}
+      <div style={{ backgroundColor: '#1B5E20', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px', position: 'sticky', top: 0, zIndex: 10 }}>
+        <span onClick={() => window.history.back()} style={{ fontSize: '20px', color: '#A5D6A7', cursor: 'pointer' }}>←</span>
+        <div style={{ flex: 1 }}>
+          <p style={{ color: '#FFFFFF', fontSize: '14px', fontWeight: '600', margin: '0 0 2px' }}>{listing?.title || 'Chat'}</p>
+          <p style={{ color: '#A5D6A7', fontSize: '11px', margin: 0 }}>{receiverEmail}</p>
         </div>
+        <span style={{ fontSize: '20px' }}>🛍️</span>
       </div>
 
-      <div style={{ padding: '16px' }}>
+      {/* Listing preview */}
+      {listing && (
+        <div style={{ backgroundColor: '#E8F5E9', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid #C8E6C9' }}>
+          <span style={{ fontSize: '24px' }}>{listing.emoji || '📦'}</span>
+          <div>
+            <p style={{ fontSize: '13px', fontWeight: '600', color: '#2C2C2A', margin: '0 0 2px' }}>{listing.title}</p>
+            <p style={{ fontSize: '12px', color: '#1B5E20', fontWeight: '500', margin: 0 }}>R{listing.price}</p>
+          </div>
+        </div>
+      )}
 
-        {conversations.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#888780' }}>
-            <p style={{ fontSize: '48px', margin: '0 0 16px' }}>💬</p>
-            <p style={{ fontSize: '16px', fontWeight: '600', color: '#2C2C2A', margin: '0 0 8px' }}>No chats yet</p>
-            <p style={{ fontSize: '13px', margin: '0 0 24px' }}>When a buyer messages you about your listing it will appear here</p>
-            <button onClick={() => window.location.href = '/home'}
-              style={{ padding: '12px 24px', backgroundColor: '#1B5E20', color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-              Browse listings
-            </button>
+      {/* Messages */}
+      <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', paddingBottom: '80px' }}>
+        {messages.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#888780' }}>
+            <p style={{ fontSize: '32px', margin: '0 0 10px' }}>💬</p>
+            <p style={{ margin: 0 }}>No messages yet. Say hello!</p>
           </div>
         )}
-
-        {conversations.map((msg, i) => {
+        {messages.map((msg, i) => {
           const isMe = msg.sender_email === user?.email
-          const initials = msg.otherEmail?.substring(0, 2).toUpperCase()
           return (
-            <div key={i}
-              onClick={() => window.location.href = `/chat?listing_id=${msg.listing_id}&receiver=${msg.otherEmail}`}
-              style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #C8E6C9', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px', cursor: 'pointer' }}>
-
-              <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: '700', color: '#1B5E20', flexShrink: 0 }}>
-                {initials}
-              </div>
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: '13px', fontWeight: '600', color: '#2C2C2A', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {msg.otherEmail}
-                </p>
-                <p style={{ fontSize: '12px', color: '#888780', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {isMe ? 'You: ' : '📩 New: '}{msg.message}
-                </p>
-              </div>
-
-              <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                <p style={{ fontSize: '11px', color: '#888780', margin: '0 0 4px' }}>
-                  {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
-                {!isMe && (
-                  <span style={{ backgroundColor: '#1B5E20', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '10px' }}>New</span>
-                )}
+            <div key={i} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: '8px' }}>
+              {!isMe && (
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#1B5E20', flexShrink: 0 }}>
+                  {msg.sender_email?.substring(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div style={{ maxWidth: '75%' }}>
+                <div style={{ padding: '10px 14px', borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px', backgroundColor: isMe ? '#1B5E20' : '#FFFFFF', border: isMe ? 'none' : '1px solid #C8E6C9' }}>
+                  <p style={{ fontSize: '14px', color: isMe ? '#FFFFFF' : '#2C2C2A', margin: '0 0 4px', wordBreak: 'break-word' }}>{msg.message}</p>
+                  <p style={{ fontSize: '10px', color: isMe ? '#A5D6A7' : '#888780', margin: 0 }}>
+                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
               </div>
             </div>
           )
         })}
+        <div ref={bottomRef} />
       </div>
 
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', borderTop: '1px solid #C8E6C9', display: 'flex', justifyContent: 'space-around', padding: '10px 0' }}>
-        {[['🏠', 'Home', '/home'], ['🔍', 'Browse', '/home'], ['➕', 'Sell', '/sell'], ['💬', 'Chats', '/chats'], ['👤', 'Profile', '/profile']].map(([icon, label, link]) => (
-          <a key={label} href={link} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', textDecoration: 'none' }}>
-            <span style={{ fontSize: '20px' }}>{icon}</span>
-            <span style={{ fontSize: '10px', color: label === 'Chats' ? '#1B5E20' : '#888780', fontWeight: label === 'Chats' ? '600' : '400' }}>{label}</span>
-          </a>
-        ))}
+      {/* Input */}
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', borderTop: '1px solid #C8E6C9', padding: '12px 16px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <input
+          type="text"
+          placeholder="Type a message..."
+          value={newMessage}
+          onChange={e => setNewMessage(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && sendMessage()}
+          style={{ flex: 1, padding: '12px 14px', borderRadius: '24px', border: '1px solid #C8E6C9', fontSize: '14px', outline: 'none', backgroundColor: '#F5F7F2' }}
+        />
+        <button onClick={sendMessage}
+          style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundColor: '#1B5E20', color: '#FFFFFF', border: 'none', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          ➤
+        </button>
       </div>
 
     </div>

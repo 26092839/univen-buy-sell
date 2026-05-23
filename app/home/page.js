@@ -112,13 +112,13 @@ export default function HomePage() {
       </div>
 
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', borderTop: '1px solid #C8E6C9', display: 'flex', justifyContent: 'space-around', padding: '10px 0' }}>
-        {[['🏠', 'Home', '/home'], ['🔍', 'Browse', '/home'], ['➕', 'Sell', '/sell'], ['💬', 'Chats', '/home'], ['👤', 'Profile', '/profile']].map(([icon, label, link]) => (
-          <a key={label} href={link} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', cursor: 'pointer', textDecoration: 'none' }}>
-            <span style={{ fontSize: '20px' }}>{icon}</span>
-            <span style={{ fontSize: '10px', color: label === 'Home' ? '#1B5E20' : '#888780', fontWeight: label === 'Home' ? '600' : '400' }}>{label}</span>
-          </a>
-        ))}
-      </div>
+  {[['🏠', 'Home', '/home'], ['🔍', 'Browse', '/home'], ['➕', 'Sell', '/sell'], ['💬', 'Chats', '/chats'], ['👤', 'Profile', '/profile']].map(([icon, label, link]) => (
+    <a key={label} href={link} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', textDecoration: 'none' }}>
+      <span style={{ fontSize: '20px' }}>{icon}</span>
+      <span style={{ fontSize: '10px', color: label === 'Home' ? '#1B5E20' : '#888780', fontWeight: label === 'Home' ? '600' : '400' }}>{label}</span>
+    </a>
+  ))}
+</div>
 
     </div>
   )
