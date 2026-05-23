@@ -151,4 +151,38 @@ export default function ChatPage() {
 
         {otherTyping && (
           <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-            <div style={{ padding: '10px 14px', borderRadius: '18px 18px 18px 4px', backgroundColor: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', display: 'flex', gap: '4px', alignItems: 'center' }}></div>
+            <div style={{ padding: '10px 14px', borderRadius: '18px 18px 18px 4px', backgroundColor: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#888', display: 'inline-block', animation: 'bounce 1s infinite 0s' }}></span>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#888', display: 'inline-block', animation: 'bounce 1s infinite 0.2s' }}></span>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#888', display: 'inline-block', animation: 'bounce 1s infinite 0.4s' }}></span>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div style={{ backgroundColor: '#F0F0F0', padding: '10px 12px', display: 'flex', gap: '10px', alignItems: 'center', flexShrink: 0 }}>
+        <input
+          type="text"
+          placeholder="Type a message..."
+          value={newMessage}
+          onChange={handleTyping}
+          onKeyDown={e => e.key === 'Enter' && sendMessage()}
+          style={{ flex: 1, padding: '12px 16px', borderRadius: '24px', border: 'none', fontSize: '14px', outline: 'none', backgroundColor: '#fff', fontFamily: 'Inter, sans-serif', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}
+        />
+        <button onClick={sendMessage}
+          style={{ width: '46px', height: '46px', borderRadius: '50%', backgroundColor: '#1B5E20', color: '#fff', border: 'none', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          ➤
+        </button>
+      </div>
+
+      <style>{`
+        @keyframes bounce {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-7px); }
+        }
+      `}</style>
+    </div>
+  )
+}
