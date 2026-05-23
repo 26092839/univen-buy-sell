@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 export default function ChatPage() {
@@ -9,36 +9,60 @@ export default function ChatPage() {
   const [listing, setListing] = useState(null)
   const [loading, setLoading] = useState(true)
   const [receiverEmail, setReceiverEmail] = useState('')
+  const bottomRef = useRef(null)
 
   useEffect(() => {
     setup()
   }, [])
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
   async function setup() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { window.location.href = '/'; return }
+    setUser(user)
+
     const params = new URLSearchParams(window.location.search)
     const listingId = params.get('listing_id')
     const receiver = params.get('receiver')
     setReceiverEmail(receiver)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { window.location.href = '/'; return }
-    setUser(user)
-
     if (listingId) {
-      const { data } = await supabase.from('listings').select('*').eq('id', listingId).single()
+      const { data } = await supabase
+        .from('listings')
+        .select('*')
+        .eq('id', listingId)
+        .single()
       setListing(data)
+      fetchMessages(listingId, user.email, receiver)
     }
 
-    fetchMessages(listingId, user.email, receiver)
     setLoading(false)
+
+    const channel = supabase
+      .channel('messages')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages'
+      }, payload => {
+        setMessages(prev => [...prev, payload.new])
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
   }
 
-  async function fetchMessages(listingId, senderEmail, receiverEmail) {
+  async function fetchMessages(listingId, myEmail, otherEmail) {
     const { data } = await supabase
       .from('messages')
       .select('*')
       .eq('listing_id', listingId)
-      .or(`sender_email.eq.${senderEmail},receiver_email.eq.${senderEmail}`)
+      .or(
+        `and(sender_email.eq.${myEmail},receiver_email.eq.${otherEmail}),and(sender_email.eq.${otherEmail},receiver_email.eq.${myEmail})`
+      )
       .order('created_at', { ascending: true })
     setMessages(data || [])
   }
@@ -51,51 +75,18 @@ export default function ChatPage() {
       receiver_email: receiverEmail,
       message: newMessage
     }])
-    if (!error) {
-      setMessages([...messages, {
-        sender_email: user.email,
-        receiver_email: receiverEmail,
-        message: newMessage,
-        created_at: new Date().toISOString()
-      }])
-      setNewMessage('')
-
-      await fetch('https://onesignal.com/api/v1/notifications', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': 'Basic be4a36mppectmg6bfb5m26tih'
-  },
-  body: JSON.stringify({
-    app_id: 'adce44ff-0f43-41f2-80af-16745ccb319c',
-    filters: [
-      { field: 'email', value: receiverEmail }
-    ],
-    contents: { en: `💬 ${user.email} sent a message about ${listing?.title}: "${newMessage}"` },
-    headings: { en: 'UNIVEN Buy & Sell 🛍️' },
-    url: `${window.location.origin}/chat?listing_id=${listing?.id}&receiver=${user.email}`
-  })
-})
-    
-  }
-    if (!error) {
-      setMessages([...messages, {
-        sender_email: user.email,
-        receiver_email: receiverEmail,
-        message: newMessage,
-        created_at: new Date().toISOString()
-      }])
-      setNewMessage('')
-    }
+    if (!error) setNewMessage('')
   }
 
-  if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontSize: '32px' }}>⏳</div>
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontSize: '32px' }}>⏳</div>
+  )
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#F5F7F2', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
 
       {/* Header */}
-      <div style={{ backgroundColor: '#1B5E20', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px', position: 'sticky', top: 0 }}>
+      <div style={{ backgroundColor: '#1B5E20', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px', position: 'sticky', top: 0, zIndex: 10 }}>
         <span onClick={() => window.history.back()} style={{ fontSize: '20px', color: '#A5D6A7', cursor: 'pointer' }}>←</span>
         <div style={{ flex: 1 }}>
           <p style={{ color: '#FFFFFF', fontSize: '14px', fontWeight: '600', margin: '0 0 2px' }}>{listing?.title || 'Chat'}</p>
@@ -127,15 +118,23 @@ export default function ChatPage() {
           const isMe = msg.sender_email === user?.email
           return (
             <div key={i} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
-              <div style={{ maxWidth: '75%', padding: '10px 14px', borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px', backgroundColor: isMe ? '#1B5E20' : '#FFFFFF', border: isMe ? 'none' : '1px solid #C8E6C9' }}>
-                <p style={{ fontSize: '14px', color: isMe ? '#FFFFFF' : '#2C2C2A', margin: '0 0 4px' }}>{msg.message}</p>
-                <p style={{ fontSize: '10px', color: isMe ? '#A5D6A7' : '#888780', margin: 0 }}>
-                  {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
+              {!isMe && (
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', color: '#1B5E20', marginRight: '8px', flexShrink: 0 }}>
+                  {msg.sender_email?.substring(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div style={{ maxWidth: '75%' }}>
+                <div style={{ padding: '10px 14px', borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px', backgroundColor: isMe ? '#1B5E20' : '#FFFFFF', border: isMe ? 'none' : '1px solid #C8E6C9' }}>
+                  <p style={{ fontSize: '14px', color: isMe ? '#FFFFFF' : '#2C2C2A', margin: '0 0 4px' }}>{msg.message}</p>
+                  <p style={{ fontSize: '10px', color: isMe ? '#A5D6A7' : '#888780', margin: 0 }}>
+                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
               </div>
             </div>
           )
         })}
+        <div ref={bottomRef} />
       </div>
 
       {/* Input */}
