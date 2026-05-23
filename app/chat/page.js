@@ -14,13 +14,8 @@ export default function ChatPage() {
   const typingTimeout = useRef(null)
   const listingIdRef = useRef(null)
 
-  useEffect(() => {
-    setup()
-  }, [])
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isTyping])
+  useEffect(() => { setup() }, [])
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, isTyping])
 
   async function setup() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -34,46 +29,22 @@ export default function ChatPage() {
     setReceiverEmail(receiver)
 
     if (listingId) {
-      const { data } = await supabase
-        .from('listings').select('*').eq('id', listingId).single()
+      const { data } = await supabase.from('listings').select('*').eq('id', listingId).single()
       setListing(data)
       await fetchMessages(listingId, user.email, receiver)
     }
 
     setLoading(false)
 
-    // Listen for new messages
-    const msgChannel = supabase
-      .channel('messages-' + listingId)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `listing_id=eq.${listingId}`
-      }, payload => {
-        setMessages(prev => [...prev, payload.new])
-      })
+    supabase.channel('messages-' + listingId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `listing_id=eq.${listingId}` },
+        payload => setMessages(prev => [...prev, payload.new]))
       .subscribe()
 
-    // Listen for typing
-    const typingChannel = supabase
-      .channel('typing-' + listingId)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'typing',
-        filter: `listing_id=eq.${listingId}`
-      }, payload => {
-        if (payload.new.user_email !== user.email) {
-          setIsTyping(payload.new.is_typing)
-        }
-      })
+    supabase.channel('typing-' + listingId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'typing', filter: `listing_id=eq.${listingId}` },
+        payload => { if (payload.new.user_email !== user.email) setIsTyping(payload.new.is_typing) })
       .subscribe()
-
-    return () => {
-      supabase.removeChannel(msgChannel)
-      supabase.removeChannel(typingChannel)
-    }
   }
 
   async function fetchMessages(listingId, myEmail, otherEmail) {
@@ -89,22 +60,10 @@ export default function ChatPage() {
   async function handleTyping(e) {
     setNewMessage(e.target.value)
     if (!user || !listingIdRef.current) return
-
-    await supabase.from('typing').upsert({
-      listing_id: parseInt(listingIdRef.current),
-      user_email: user.email,
-      is_typing: true,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'listing_id,user_email' })
-
+    await supabase.from('typing').upsert({ listing_id: parseInt(listingIdRef.current), user_email: user.email, is_typing: true, updated_at: new Date().toISOString() }, { onConflict: 'listing_id,user_email' })
     clearTimeout(typingTimeout.current)
     typingTimeout.current = setTimeout(async () => {
-      await supabase.from('typing').upsert({
-        listing_id: parseInt(listingIdRef.current),
-        user_email: user.email,
-        is_typing: false,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'listing_id,user_email' })
+      await supabase.from('typing').upsert({ listing_id: parseInt(listingIdRef.current), user_email: user.email, is_typing: false, updated_at: new Date().toISOString() }, { onConflict: 'listing_id,user_email' })
     }, 2000)
   }
 
@@ -113,24 +72,20 @@ export default function ChatPage() {
     const messageText = newMessage
     setNewMessage('')
 
-    await supabase.from('typing').upsert({
-      listing_id: parseInt(listingIdRef.current),
-      user_email: user.email,
-      is_typing: false,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'listing_id,user_email' })
-
-    const { error } = await supabase.from('messages').insert([{
-      listing_id: listing?.id,
-      sender_email: user.email,
-      receiver_email: receiverEmail,
-      message: messageText
-    }])
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({ listing_id: Number(listingIdRef.current), sender_email: user.email, receiver_email: receiverEmail, message: messageText })
+      .select()
 
     if (error) {
-      console.log('Error:', error.message)
+      alert('Failed to send: ' + error.message)
       setNewMessage(messageText)
+      return
     }
+
+    setMessages(prev => [...prev, data[0]])
+
+    await supabase.from('typing').upsert({ listing_id: parseInt(listingIdRef.current), user_email: user.email, is_typing: false, updated_at: new Date().toISOString() }, { onConflict: 'listing_id,user_email' })
   }
 
   if (loading) return (
@@ -148,9 +103,7 @@ export default function ChatPage() {
         </div>
         <div style={{ flex: 1 }}>
           <p style={{ color: '#FFFFFF', fontSize: '14px', fontWeight: '600', margin: '0 0 1px' }}>{receiverEmail}</p>
-          <p style={{ color: '#A5D6A7', fontSize: '11px', margin: 0 }}>
-            {isTyping ? '✍️ typing...' : listing?.title}
-          </p>
+          <p style={{ color: '#A5D6A7', fontSize: '11px', margin: 0 }}>{isTyping ? '✍️ typing...' : listing?.title}</p>
         </div>
       </div>
 
@@ -179,7 +132,6 @@ export default function ChatPage() {
           const isMe = msg.sender_email === user?.email
           const prevMsg = messages[i - 1]
           const showTime = !prevMsg || new Date(msg.created_at) - new Date(prevMsg.created_at) > 300000
-
           return (
             <div key={i}>
               {showTime && (
@@ -192,16 +144,13 @@ export default function ChatPage() {
               <div style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
                 <div style={{ maxWidth: '78%', padding: '10px 14px', borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px', backgroundColor: isMe ? '#1B5E20' : '#FFFFFF', border: isMe ? 'none' : '1px solid #E0E0E0', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}>
                   <p style={{ fontSize: '14px', color: isMe ? '#FFFFFF' : '#2C2C2A', margin: 0, wordBreak: 'break-word', lineHeight: '1.5' }}>{msg.message}</p>
-                  {isMe && (
-                    <p style={{ fontSize: '10px', color: '#A5D6A7', margin: '4px 0 0', textAlign: 'right' }}>✓✓</p>
-                  )}
+                  {isMe && <p style={{ fontSize: '10px', color: '#A5D6A7', margin: '4px 0 0', textAlign: 'right' }}>✓✓</p>}
                 </div>
               </div>
             </div>
           )
         })}
 
-        {/* Typing indicator */}
         {isTyping && (
           <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
             <div style={{ padding: '12px 16px', borderRadius: '18px 18px 18px 4px', backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0', display: 'flex', gap: '4px', alignItems: 'center' }}>
@@ -211,22 +160,16 @@ export default function ChatPage() {
             </div>
           </div>
         )}
-
         <div ref={bottomRef} />
       </div>
 
       {/* Input */}
       <div style={{ backgroundColor: '#FFFFFF', borderTop: '1px solid #E0E0E0', padding: '12px 16px', display: 'flex', gap: '10px', alignItems: 'center', flexShrink: 0 }}>
-        <input
-          type="text"
-          placeholder="Type a message..."
-          value={newMessage}
-          onChange={handleTyping}
+        <input type="text" placeholder="Type a message..." value={newMessage} onChange={handleTyping}
           onKeyDown={e => e.key === 'Enter' && sendMessage()}
-          style={{ flex: 1, padding: '12px 16px', borderRadius: '24px', border: '1px solid #E0E0E0', fontSize: '14px', outline: 'none', backgroundColor: '#F5F7F2', fontFamily: 'Inter, sans-serif' }}
-        />
+          style={{ flex: 1, padding: '12px 16px', borderRadius: '24px', border: '1px solid #E0E0E0', fontSize: '14px', outline: 'none', backgroundColor: '#F5F7F2', fontFamily: 'Inter, sans-serif' }} />
         <button onClick={sendMessage}
-          style={{ width: '46px', height: '46px', borderRadius: '50%', backgroundColor: newMessage.trim() ? '#1B5E20' : '#C8E6C9', color: '#FFFFFF', border: 'none', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s', flexShrink: 0 }}>
+          style={{ width: '46px', height: '46px', borderRadius: '50%', backgroundColor: newMessage.trim() ? '#1B5E20' : '#C8E6C9', color: '#FFFFFF', border: 'none', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           ➤
         </button>
       </div>
@@ -237,7 +180,6 @@ export default function ChatPage() {
           30% { transform: translateY(-6px); }
         }
       `}</style>
-
     </div>
   )
 }
